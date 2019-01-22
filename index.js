@@ -91,6 +91,7 @@ const exchangeForTokens = async (userId, exchangeProof) => {
     // Usually, this token data should be persisted in a database and associated with
     // a user identity.
     const tokens = JSON.parse(responseBody);
+    console.log('Exchange for tokens body', tokens);
     refreshTokenStore[userId] = tokens.refresh_token;
     accessTokenCache.set(userId, tokens.access_token, Math.round(tokens.expires_in * 0.75));
 
@@ -131,14 +132,14 @@ const isAuthorized = (userId) => {
 //   Using an Access Token to Query the HubSpot API   //
 //====================================================//
 
-const getContact = async (accessToken) => {
+const getContact = async (accessToken, count = 1) => {
   console.log('Retrieving a contact from HubSpot using an access token');
   try {
     const headers = {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     };
-    const result = await request.get('https://api.hubapi.com/contacts/v1/lists/all/contacts/all?count=1', {
+    const result = await request.get(`https://api.hubapi.com/contacts/v1/lists/all/contacts/all?count=${parseInt(count)}`, {
       headers: headers
     });
 
@@ -149,30 +150,50 @@ const getContact = async (accessToken) => {
   }
 };
 
+const getFields = async (accessToken) => {
+  console.log('Retrieving a list of fields from HubSpot using an access token');
+  try {
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    };
+    const result = await request.get(`https://api.hubapi.com/properties/v1/contacts/properties`, {
+      headers: headers
+    });
+
+    console.log('  > results', result);
+    return JSON.parse(result);
+  } catch (e) {
+    console.error('  > Unable to retrieve list of fields');
+    return JSON.parse(e);
+  }
+};
+
 //========================================//
 //   Displaying information to the user   //
 //========================================//
 
-const displayContactName = (res, contact) => {
-  if (contact.status === 'error') {
-    res.write(`<p>Unable to retrieve contact! Error Message: ${contact.message}</p>`);
-    return;
-  }
-  const { firstname, lastname } = contact.properties;
-  res.write(`<p>Contact name: ${firstname.value} ${lastname.value}</p>`);
-};
+// const displayContactName = (res, contact) => {
+//   if (contact.status === 'error') {
+//     res.write(`<p>Unable to retrieve contact! Error Message: ${contact.message}</p>`);
+//     return;
+//   }
+//   const { firstname, lastname } = contact.properties;
+//   res.write(`<p>Contact name: ${firstname.value} ${lastname.value}</p>`);
+// };
 
 app.get('/', async (req, res) => {
   res.setHeader('Content-Type', 'text/html');
   res.write(`<h2>HubSpot OAuth 2.0 Quickstart App</h2>`);
   if (isAuthorized(req.sessionID)) {
     const accessToken = await getAccessToken(req.sessionID);
-    const contact = await getContact(accessToken);
+    // const result = await getContact(accessToken, 2);
+    const result = await getFields(accessToken);
     res.write(`<h4>Access token: ${accessToken}</h4>`);
-    displayContactName(res, contact);
+    res.write(`<pre>${JSON.stringify(result, null, 2)}</pre>`)
   } else {
     res.write(`<h4>Access token:</h4>`);
-    res.write(`<a href="/install">Install</a>`);
+    res.write(`<a href="install">Install</a>`);
   }
   res.end();
 });
